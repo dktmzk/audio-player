@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useRef, useEffect, useMemo, useLayoutEffect } from 'react';
 import Player from './components/Player';
 import Playlist from './components/Playlist';
-import { Upload, Shuffle, Settings, Volume2, FileAudio } from 'lucide-react';
+import { Upload, Settings, Volume2, FileAudio } from 'lucide-react';
 
 interface Track {
   id: string; // Unique identifier for each track

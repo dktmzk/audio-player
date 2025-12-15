@@ -102,6 +102,13 @@ const Player: React.FC<PlayerProps> = ({
 
     // Handle Region Out (Infinite Looping Logic)
     wsRegions.on('region-out', (region) => {
+        // Debounce check: Prevent double-firing within 100ms
+        const now = Date.now();
+        if (now - lastRegionOutTimeRef.current < 100) {
+            return;
+        }
+        lastRegionOutTimeRef.current = now;
+
         // Infinite loop for regions (Drill Mode)
         setRegionLoop(prev => prev + 1);
         // Small timeout to ensure seek happens cleanly
