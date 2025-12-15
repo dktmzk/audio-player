@@ -1,0 +1,82 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+.pnpm-store/
+
+# Diagnostic reports (https://nodejs.org/api/report.html)
+.report/
+
+# Node.js
+# /node_modules
+/node_modules
+/.pnp
+.pnp.js
+.yarn/
+# When using `npm` to install dependencies, `node_modules` is usually
+# created inside the project root directory. However, it might be
+# created in a parent directory when using workspaces.
+# To ensure that `node_modules` is ignored, this file should be
+# placed in the project root directory, and if repositories are
+# composed of multiple projects (for example, a monorepo),
+# Node project roots might need to define their own `.gitignore` files.
+
+# End of https://www.toptal.com/developers/gitignore/api/node
+
+# IDEs and editors
+.project
+.idea
+.vs
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.bak
+*.vssscc
+# End of https://www.toptal.com/developers/gitignore/api/visualstudiocode
+
+# Build results
+/dist
+/build
+.vite/
+# End of https://www.toptal.com/developers/gitignore/api/vite
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+# End of https://www.toptal.com/developers/gitignore/api/macos
+
+# OS generated files
+.classpath
+.project
+.settings
+*.metadata
+# End of https://www.toptal.com/developers/gitignore/api/eclipse
+
+# Temporary files
+*.tmp
+*~
+# End of https://www.toptal.com/developers/gitignore/api/temporary
+
+# Editor-specific
+.vscode/
+# End of https://www.toptal.com/developers/gitignore/api/vscode
+
+# Thumbnails
+.thumbnails
+# End of https://www.toptal.com/developers/gitignore/api/thumbnails
+
+# TypeScript
+*.tsbuildinfo
+# End of https://www.toptal.com/developers/gitignore/api/typescript
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+# End of https://www.toptal.com/developers/gitignore/api/windows
