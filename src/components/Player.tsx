@@ -45,6 +45,12 @@ const Player: React.FC<PlayerProps> = ({
   // Region Loop: How many times the CURRENT REGION has played
   const [regionLoop, setRegionLoop] = useState(0);
   const regionLoopRef = useRef(0);
+  
+  // Ref to track last time for loop detection
+  const lastTimeRef = useRef(0);
+  
+  // Guard to prevent double-firing of finish event
+  const isHandlingFinishRef = useRef(false);
 
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -52,6 +58,48 @@ const Player: React.FC<PlayerProps> = ({
   const lastRegionOutTimeRef = useRef(0);
 
   const currentTrack = playlist[currentTrackIndex];
+
+  // State Ref to access latest values inside WaveSurfer events
+  // Declared AFTER state variables so they are available
+  const stateRef = useRef({
+      isLoopLocked,
+      currentLoop,
+      loopCount,
+      activeRegion,
+      onTrackEnd,
+      isPlaying,
+      playbackSpeeds,
+      regionLoop
+  });
+
+  // Update State Ref - includes onTrackEnd to avoid stale closure
+  useEffect(() => {
+      stateRef.current = {
+          isLoopLocked,
+          currentLoop,
+          loopCount,
+          activeRegion,
+          onTrackEnd,
+          isPlaying,
+          playbackSpeeds,
+          regionLoop
+      };
+  }, [isLoopLocked, currentLoop, loopCount, activeRegion, onTrackEnd, isPlaying, playbackSpeeds, regionLoop]);
+
+  // (removed) safeWsPlay helper — not used anymore
+
+  // Helper for safe audio element playback
+  const safePlay = async () => {
+    if (audioRef.current) {
+        try {
+            await audioRef.current.play();
+        } catch (error: any) {
+            if (error.name !== 'AbortError') {
+                console.error("Playback failed:", error);
+            }
+        }
+    }
+  };
 
   // Sync ref with state
   useEffect(() => {
@@ -86,6 +134,9 @@ const Player: React.FC<PlayerProps> = ({
       color: 'rgba(59, 130, 246, 0.3)', // Semi-transparent blue
     });
 
+    // Track if we were playing before region interaction
+    let wasPlayingBeforeRegion = false;
+
     // Handle Region Creation
     wsRegions.on('region-created', (region) => {
       // Remove other regions to enforce single A-B loop
@@ -94,6 +145,29 @@ const Player: React.FC<PlayerProps> = ({
       });
       setActiveRegion(region);
       setRegionLoop(0); // Reset REGION loop count
+      
+      // Region created (log removed)
+      
+      // If we were playing before, ensure we continue playing
+      // The drag-selection might pause playback, so restore it
+      if (wasPlayingBeforeRegion) {
+          setTimeout(() => {
+              const audio = audioRef.current;
+              if (audio && audio.paused) {
+                  // resuming playback after region creation
+                  ws.play().catch((err: any) => {
+                      if (err.name !== 'AbortError') {
+                          console.error('[region-created] Play failed:', err);
+                      }
+                  });
+              }
+          }, 10);
+      }
+    });
+
+    // Track playback state before interaction
+    ws.on('interaction', () => {
+        wasPlayingBeforeRegion = !audioRef.current?.paused;
     });
 
     // Handle Region Updates
@@ -106,20 +180,151 @@ const Player: React.FC<PlayerProps> = ({
         // Debounce check: Prevent double-firing within 100ms
         const now = Date.now();
         if (now - lastRegionOutTimeRef.current < 100) {
+            // debounced
             return;
         }
         lastRegionOutTimeRef.current = now;
 
+        // Check if region is still active (not removed)
+        // stateRef.current.activeRegion will be null if region was just cleared
+        if (!stateRef.current.activeRegion) {
+            // region no longer active
+            return;
+        }
+
+        // region out detected; looping back to start
+        
         // Infinite loop for regions (Drill Mode)
-        setRegionLoop(prev => prev + 1);
-        // Small timeout to ensure seek happens cleanly
-        setTimeout(() => region.play(), 0);
+        // Just increment the counter for display, but don't change speed
+        setRegionLoop(prev => {
+            const newLoop = prev + 1;
+            return newLoop;
+        });
+        
+        // Keep the same speed based on currentLoop (the track loop), not regionLoop
+        // Speed is already set based on currentLoop when the track started this pass
+        
+        // Seek to region start and continue playing
+        // Use ws.setTime instead of region.play() for more reliable behavior
+        setTimeout(() => {
+            // Double-check region is still active before seeking
+            if (!stateRef.current.activeRegion) {
+                // region cleared during timeout
+                return;
+            }
+            ws.setTime(region.start);
+            // Ensure we're still playing
+            if (audioRef.current && audioRef.current.paused) {
+                ws.play().catch((err: any) => {
+                    if (err.name !== 'AbortError') {
+                        console.error('[region-out] Play failed:', err);
+                    }
+                });
+            }
+        }, 10);
+    });
+
+    // Handle Track Finish (Custom Looping Logic)
+    ws.on('finish', () => {
+        // Guard against double-firing
+        if (isHandlingFinishRef.current) {
+            // already handling finish
+            return;
+        }
+        isHandlingFinishRef.current = true;
+        
+        const { isLoopLocked, currentLoop, loopCount, activeRegion, onTrackEnd: handleTrackEnd } = stateRef.current;
+        
+        // finish event fired
+        
+        // If we are in a region, the region plugin handles the loop (usually).
+        // But if we hit the end of the track while in a region (edge case), ignore this.
+        if (activeRegion) {
+            // in active region, ignore external finish
+            isHandlingFinishRef.current = false;
+            return;
+        }
+
+        const shouldLoop = isLoopLocked || currentLoop < loopCount - 1;
+        // shouldLoop decision made
+
+        if (shouldLoop) {
+            // Calculate next loop index for speed
+            const nextLoopIndex = isLoopLocked ? currentLoop : currentLoop + 1;
+            const speedIndex = Math.min(nextLoopIndex, loopCount - 1);
+            const nextSpeed = stateRef.current.playbackSpeeds[speedIndex] || 1.0;
+            
+            if (!isLoopLocked) {
+                // Increment loop count for non-locked loops
+                setCurrentLoop(prev => prev + 1);
+            }
+            
+            // Use setTimeout to break out of the current event loop
+            // This allows the audio element to fully complete its 'ended' state
+            setTimeout(() => {
+                // Restarting playback via WaveSurfer at speed: (value in nextSpeed)
+                // Set playback rate on audio element
+                const audio = audioRef.current;
+                if (audio) {
+                    audio.playbackRate = nextSpeed;
+                }
+                ws.setTime(0);
+                ws.play().then(() => {
+                    // WaveSurfer play succeeded (log removed)
+                    isHandlingFinishRef.current = false;
+                }).catch((err: any) => {
+                    // WaveSurfer play failed, trying audio element directly
+                    console.error('[finish] WaveSurfer play failed:', err);
+                    const audio = audioRef.current;
+                    if (audio) {
+                        audio.currentTime = 0;
+                        audio.play().then(() => {
+                            isHandlingFinishRef.current = false;
+                        }).catch((e: any) => {
+                            isHandlingFinishRef.current = false;
+                            if (e.name !== 'AbortError') {
+                                console.error('[finish] All play attempts failed:', e);
+                            }
+                        });
+                    } else {
+                        isHandlingFinishRef.current = false;
+                    }
+                });
+            }, 50);
+        } else {
+            // Truly finished - keep guard set until we've returned
+            // to prevent the double-fire from also calling onTrackEnd
+            handleTrackEnd();
+            // Guard will be reset when track changes via currentTrackIndex effect
+        }
     });
 
     // Clear active region state if removed manually
     wsRegions.on('region-removed', () => {
         setActiveRegion(null);
-        setRegionLoop(0); // Reset region loop
+        setRegionLoop(0); // Reset region loop counter (display only)
+        // Don't seek or change playback - let it continue from current position
+    });
+
+    // Auto-play when a new track is loaded and ready
+    ws.on('ready', () => {
+        const { isPlaying, playbackSpeeds, loopCount, currentLoop } = stateRef.current;
+        
+        // Apply the correct playback rate based on currentLoop (track loop)
+        // In drill mode, we use the same speed as the current track loop, not regionLoop
+        const audio = audioRef.current;
+        if (audio) {
+            const speedIndex = Math.min(currentLoop, loopCount - 1);
+            audio.playbackRate = playbackSpeeds[speedIndex] || 1.0;
+        }
+        
+        if (isPlaying) {
+            ws.play().catch((err: any) => {
+                if (err.name !== 'AbortError') {
+                    console.error('[ready] Play failed:', err);
+                }
+            });
+        }
     });
 
     return () => {
@@ -130,8 +335,12 @@ const Player: React.FC<PlayerProps> = ({
   // Reset loop count when track changes
   useEffect(() => {
     setCurrentLoop(0);
+    lastTimeRef.current = 0;
+    isHandlingFinishRef.current = false; // Reset the finish guard
+    
     setRegionLoop(0);
     setIsLoopLocked(false);
+
     if (regionsPluginRef.current) {
         regionsPluginRef.current.clearRegions();
         setActiveRegion(null);
@@ -139,32 +348,40 @@ const Player: React.FC<PlayerProps> = ({
   }, [currentTrackIndex]);
 
   useEffect(() => {
-    if (audioRef.current && currentTrack) {
+    if (audioRef.current && currentTrack && wavesurferRef.current) {
+      // Use WaveSurfer to load the track. This renders the waveform AND sets the audio element src.
       const isSameSrc = audioRef.current.src === currentTrack.url;
       if (!isSameSrc) {
-        audioRef.current.src = currentTrack.url;
+        wavesurferRef.current.load(currentTrack.url).catch((err) => {
+             if (err.name !== 'AbortError') {
+                 console.warn("WaveSurfer load error:", err);
+             }
+        });
       }
-      
-      // DETERMINE ACTIVE LOOP INDEX
-      // If region active -> use regionLoop
-      // If normal play -> use currentLoop
-      const activeLoopIndex = activeRegion ? regionLoop : currentLoop;
-
-      // Use the active loop index, but cap it at the last configured speed
-      const speedIndex = Math.min(activeLoopIndex, loopCount - 1);
-      audioRef.current.playbackRate = playbackSpeeds[speedIndex] || 1.0;
 
       if (isPlaying) {
-        audioRef.current.play().catch(e => console.error("Playback failed:", e));
+         safePlay();
       }
     }
-  }, [currentTrack, currentLoop, regionLoop, playbackSpeeds, loopCount, activeRegion]); 
+  }, [currentTrack, currentLoop, wavesurferRef.current]); 
+
+  // Separate effect for playback rate - this should NOT trigger play/restart
+  useEffect(() => {
+    if (audioRef.current) {
+      const speedIndex = Math.min(currentLoop, loopCount - 1);
+      const newRate = playbackSpeeds[speedIndex] || 1.0;
+      // Only update if the rate actually changed
+      if (audioRef.current.playbackRate !== newRate) {
+        audioRef.current.playbackRate = newRate;
+      }
+    }
+  }, [currentLoop, playbackSpeeds, loopCount]);
 
   // Handle play/pause toggle separately
   useEffect(() => {
     if (audioRef.current) {
         if (isPlaying) {
-             audioRef.current.play().catch(e => console.error("Playback failed:", e));
+             safePlay();
         } else {
             audioRef.current.pause();
         }
@@ -188,32 +405,11 @@ const Player: React.FC<PlayerProps> = ({
     }
   };
 
-  // Robust Track End (Normal Mode)
-  const handleAudioEnded = () => {
-      // Only handle if NOT in a region (Region Plugin handles that case)
-      if (!activeRegion) {
-        if (isLoopLocked) {
-             if (audioRef.current) {
-              audioRef.current.currentTime = 0;
-              audioRef.current.play();
-             }
-             return;
-        }
-
-        if (currentLoop < loopCount - 1) {
-          setCurrentLoop((prev) => prev + 1);
-          if (audioRef.current) {
-              audioRef.current.currentTime = 0;
-              audioRef.current.play();
-          }
-        } else {
-          onTrackEnd();
-        }
-      }
-  };
-
   const handleClearRegion = (e: React.MouseEvent) => {
       e.stopPropagation();
+      // Update stateRef synchronously BEFORE clearing regions
+      // This prevents the region-out event from seeking back
+      stateRef.current.activeRegion = null;
       regionsPluginRef.current?.clearRegions();
       setActiveRegion(null);
       setRegionLoop(0);
@@ -238,8 +434,9 @@ const Player: React.FC<PlayerProps> = ({
     return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
   };
 
-  // Helper to get display values
+  // Helper to get display values - loop count uses regionLoop or currentLoop, but speed always uses currentLoop
   const displayLoop = activeRegion ? regionLoop : currentLoop;
+  const displaySpeed = playbackSpeeds[Math.min(currentLoop, loopCount - 1)] || 1.0;
 
   return (
     <div className="bg-white/10 backdrop-blur-md border border-white/20 p-6 rounded-2xl shadow-xl flex flex-col items-center w-full relative h-[320px] justify-center">
@@ -251,8 +448,8 @@ const Player: React.FC<PlayerProps> = ({
             <p className="text-gray-400 text-sm">
             {currentTrack 
               ? activeRegion 
-                    ? `Region Loop ${displayLoop + 1} (Infinite) • ${(playbackSpeeds[Math.min(displayLoop, loopCount - 1)] || 1.0).toFixed(2)}x Speed`
-                    : `Loop ${displayLoop + 1} of ${loopCount} • ${(playbackSpeeds[Math.min(displayLoop, loopCount - 1)] || 1.0).toFixed(2)}x Speed`
+                    ? `Region Loop ${displayLoop + 1} (Infinite) • ${displaySpeed.toFixed(2)}x Speed`
+                    : `Loop ${displayLoop + 1} of ${loopCount} • ${displaySpeed.toFixed(2)}x Speed`
               : 'Select a track to start'}
             </p>
             {activeRegion && (
@@ -272,14 +469,13 @@ const Player: React.FC<PlayerProps> = ({
         ref={audioRef}
         onTimeUpdate={handleTimeUpdate}
         onLoadedMetadata={handleLoadedMetadata}
-        onEnded={handleAudioEnded}
-        className="hidden" 
+        className="fixed top-0 left-0 opacity-0 pointer-events-none" 
       />
 
       {/* Waveform Container */}
       <div className="w-full flex items-center gap-3 text-xs text-gray-400 font-mono mb-6 relative group">
           <span>{formatTime(currentTime)}</span>
-          <div ref={containerRef} className="flex-1 cursor-pointer" />
+          <div ref={containerRef} className="flex-1 cursor-pointer w-full min-h-[64px]" />
           <span>{formatTime(duration)}</span>
           
           {/* Helper Tooltip */}
@@ -360,7 +556,8 @@ const Player: React.FC<PlayerProps> = ({
         {activeRegion && (
             <button
                 onClick={handleClearRegion}
-                className="absolute right-6 text-xs text-red-400 hover:text-red-300 flex items-center gap-1 border border-red-500/30 px-2 py-1 rounded hover:bg-red-500/10 transition-colors"
+                className="absolute right-6 bottom-6 text-xs text-red-400 hover:text-red-300 flex items-center gap-1 border border-red-500/30 px-2 py-1 rounded hover:bg-red-500/10 transition-colors"
+                title="Clear Loop"
             >
                 <Scissors size={12} /> Clear Loop
             </button>
