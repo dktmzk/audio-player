@@ -148,7 +148,7 @@ const Playlist: React.FC<PlaylistProps> = ({
                   <span className={`text-xs font-mono w-5 text-right flex-shrink-0 ${index === currentTrackIndex ? 'text-blue-400' : 'text-gray-600'}`}>
                       {index + 1}
                   </span>
-                  <span className="truncate font-medium text-sm">{track.name}</span>
+                  <span className="truncate font-medium text-sm max-w-[120px] sm:max-w-none">{track.name}</span>
               </div>
 
               {/* Right Col: Priority Slider & Delete */}
@@ -191,7 +191,7 @@ const Playlist: React.FC<PlaylistProps> = ({
                       e.stopPropagation(); 
                       onRemoveTrack(track.id);
                     }}
-                    className="opacity-0 group-hover:opacity-100 p-1.5 text-gray-500 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-all"
+                    className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 p-1.5 text-gray-500 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-all"
                     title="Remove Track"
                   >
                     <Trash2 size={14} />

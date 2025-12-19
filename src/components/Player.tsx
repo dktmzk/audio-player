@@ -268,6 +268,47 @@ const Player: React.FC<PlayerProps> = ({
     };
   }, []);
 
+  // Media Session API
+  useEffect(() => {
+    if ('mediaSession' in navigator) {
+        if (currentTrack) {
+            navigator.mediaSession.metadata = new MediaMetadata({
+                title: currentTrack.name,
+                artwork: [
+                    { src: 'vite.svg', sizes: '192x192', type: 'image/svg+xml' },
+                    { src: 'vite.svg', sizes: '512x512', type: 'image/svg+xml' }
+                ]
+            });
+        } else {
+            navigator.mediaSession.metadata = null;
+        }
+    }
+  }, [currentTrack]);
+
+  useEffect(() => {
+    if ('mediaSession' in navigator) {
+        navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused';
+    }
+  }, [isPlaying]);
+
+  useEffect(() => {
+    if ('mediaSession' in navigator) {
+        navigator.mediaSession.setActionHandler('play', () => setIsPlaying(true));
+        navigator.mediaSession.setActionHandler('pause', () => setIsPlaying(false));
+        navigator.mediaSession.setActionHandler('previoustrack', onPreviousTrack);
+        navigator.mediaSession.setActionHandler('nexttrack', onNextTrack);
+        
+        navigator.mediaSession.setActionHandler('seekto', (details) => {
+            if (details.seekTime !== undefined && wavesurferRef.current && duration > 0) {
+                wavesurferRef.current.seekTo(details.seekTime / duration);
+            }
+        });
+        
+        navigator.mediaSession.setActionHandler('seekbackward', () => handleRewind());
+        navigator.mediaSession.setActionHandler('seekforward', () => handleFastForward());
+    }
+  }, [onNextTrack, onPreviousTrack, setIsPlaying, duration]);
+
   useEffect(() => {
     setCurrentLoop(0);
     lastTimeRef.current = 0;
@@ -411,7 +452,16 @@ const Player: React.FC<PlayerProps> = ({
   }, [isPlaying, setIsPlaying, onNextTrack, onPreviousTrack]);
 
   return (
-    <div className="bg-white/10 backdrop-blur-md border border-white/20 p-6 rounded-2xl shadow-xl flex flex-col items-center w-full relative h-[320px] justify-center">
+    <div className="bg-white/10 backdrop-blur-md border border-white/20 py-8 px-6 rounded-2xl shadow-xl flex flex-col items-center w-full relative min-h-[320px]">
+      {activeRegion && (
+          <button
+              onClick={handleClearRegion}
+              className="absolute bottom-6 right-6 text-xs text-red-400 hover:text-red-300 flex items-center gap-1 border border-red-500/30 px-2 py-1 rounded hover:bg-red-500/10 transition-colors z-10 hidden sm:flex"
+              title="Clear Loop"
+          >
+              <Scissors size={12} /> Clear Loop
+          </button>
+      )}
       <div className="w-full text-center mb-6">
         <h2 className="text-2xl font-bold text-white tracking-wide truncate">
           {currentTrack ? currentTrack.name : 'No Track Selected'}
@@ -458,8 +508,8 @@ const Player: React.FC<PlayerProps> = ({
           )}
       </div>
 
-      {/* Controls */}
-      <div className="flex items-center gap-6">
+      {/* Controls - Wide screen: single row with all 7 buttons */}
+      <div className="hidden sm:flex items-center justify-center gap-6">
         {/* Shuffle Toggle */}
         <button
             onClick={onToggleShuffle}
@@ -525,15 +575,90 @@ const Player: React.FC<PlayerProps> = ({
             <Repeat size={20} />
         </button>
 
-        {activeRegion && (
-            <button
-                onClick={handleClearRegion}
-                className="absolute right-6 bottom-6 text-xs text-red-400 hover:text-red-300 flex items-center gap-1 border border-red-500/30 px-2 py-1 rounded hover:bg-red-500/10 transition-colors"
-                title="Clear Loop"
-            >
-                <Scissors size={12} /> Clear Loop
-            </button>
-        )}
+      </div>
+
+      {/* Controls - Small screen: 2 rows with play button centered */}
+      <div className="flex sm:hidden flex-col items-center gap-3">
+        {/* Primary row - transport controls */}
+        <div className="flex items-center justify-center gap-4">
+          {/* Previous Track Button */}
+          <button
+              onClick={onPreviousTrack}
+              className="text-gray-300 hover:text-white transition-colors p-2 hover:bg-white/10 rounded-full"
+              title="Previous Track"
+          >
+              <SkipBack size={24} />
+          </button>
+
+          {/* Rewind 5 Seconds Button */}
+          <button
+              onClick={handleRewind}
+              className="text-gray-300 hover:text-white transition-colors p-2 hover:bg-white/10 rounded-full"
+              title="Rewind 5 Seconds"
+          >
+              <Rewind size={24} />
+          </button>
+
+          <button
+            onClick={handlePlayPause}
+            className="bg-blue-600 hover:bg-blue-500 text-white p-4 rounded-full shadow-lg transition-all hover:scale-105 active:scale-95 flex items-center justify-center"
+          >
+            {isPlaying ? <Pause size={32} fill="currentColor" /> : <Play size={32} fill="currentColor" className="ml-1" />}
+          </button>
+          
+          {/* Fast Forward 5 Seconds Button */}
+          <button
+              onClick={handleFastForward}
+              className="text-gray-300 hover:text-white transition-colors p-2 hover:bg-white/10 rounded-full"
+              title="Forward 5 Seconds"
+          >
+              <FastForward size={24} />
+          </button>
+
+          {/* Next Track Button */}
+          <button
+              onClick={onNextTrack}
+              className="text-gray-300 hover:text-white transition-colors p-2 hover:bg-white/10 rounded-full"
+              title="Next Track"
+          >
+              <SkipForward size={24} />
+          </button>
+        </div>
+
+        {/* Secondary row - mode toggles */}
+        <div className="flex items-center justify-center gap-4">
+          {/* Shuffle Toggle */}
+          <button
+              onClick={onToggleShuffle}
+              className={`p-2 rounded-full transition-all ${
+                  isShuffleOn ? 'text-blue-400 bg-blue-400/10' : 'text-gray-500 hover:text-gray-300'
+              }`}
+              title="Toggle Weighted Shuffle"
+          >
+              <Shuffle size={20} />
+          </button>
+
+           {/* Loop Lock Button */}
+           <button
+              onClick={() => setIsLoopLocked(!isLoopLocked)}
+              className={`p-2 rounded-full transition-all ${
+                  isLoopLocked ? 'text-indigo-400 bg-indigo-400/10' : 'text-gray-500 hover:text-gray-300'
+              }`}
+              title="Lock Current Loop"
+          >
+              <Repeat size={20} />
+          </button>
+
+          {activeRegion && (
+              <button
+                  onClick={handleClearRegion}
+                  className="text-xs text-red-400 hover:text-red-300 flex items-center gap-1 border border-red-500/30 px-2 py-1 rounded hover:bg-red-500/10 transition-colors"
+                  title="Clear Loop"
+              >
+                  <Scissors size={12} /> Clear Loop
+              </button>
+          )}
+        </div>
       </div>
        
        <div className="mt-6 flex items-center gap-2 text-xs text-gray-500 bg-black/20 px-3 py-1 rounded-full">
