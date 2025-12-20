@@ -6,14 +6,24 @@
 
 ### Advanced Playback
 *   **Progressive Speed Loops:** Set different playback speeds for the 1st, 2nd, and 3rd pass of a track (e.g., 1.0x -> 1.1x -> 1.2x).
-*   **A-B Looping (Drill Mode):** Drag on the waveform to create a loop region. This region will **loop infinitely** with your progressive speed settings until you clear it.
+*   **A-B Looping (Drill Mode):** Drag on the waveform to create a loop region. This region will **loop infinitely** until you clear it.
 *   **Auto-Advance:** In standard playback (no region), the player advances to the next track automatically after your set number of loops.
+*   **Sleep Timer:** Set a countdown to automatically stop playback—perfect for nighttime listening.
+*   **Session Timer:** Track your active practice time with a real-time session counter.
 
 ### Smart Playlist Management
+*   **Multiple Playlists:** Create, rename, and manage multiple collections of tracks.
 *   **Weighted Shuffle:** A "True Dynamic Shuffle" that picks the next track based on priority. High-priority tracks play significantly more often.
 *   **Priority System:** Assign "Low", "Medium", or "High" priority to any track using a slider.
-*   **Recent History Sort:** Sort your playlist by "Recent" to instantly find the track you just finished listening to (perfect for adjusting priority on the fly).
-*   **Drag & Drop:** Load files instantly by dragging them anywhere onto the screen.
+*   **Recent History Sort:** Sort your playlist by "Recent" to instantly find the track you just finished listening to.
+*   **Offline-First:** All audio files and settings are stored locally in your browser using IndexedDB. No server upload required.
+
+### Keyboard Shortcuts
+*   `Space`: Play / Pause
+*   `Left` / `Right Arrows`: Seek backward/forward 5 seconds
+*   `Up` / `Down Arrows`: Adjust volume
+*   `N`: Next track
+*   `P`: Previous track
 
 ## Usage Guide
 
@@ -23,9 +33,12 @@
     *   Set the speed for each pass (e.g., Pass 1: 1.0x, Pass 2: 1.1x).
 3.  **Practice:**
     *   **Review Mode:** Just hit Play. Tracks will play X times and auto-advance.
-    *   **Drill Mode:** Drag on the waveform to highlight a section. It will loop *forever* at your set speeds until you click "Clear Loop".
+    *   **Drill Mode:** Drag on the waveform to highlight a section. It will loop *forever* until you click "Clear Loop".
 4.  **Prioritize:**
     *   Set new/hard tracks to **High Priority**.
     *   Enable **Shuffle** (Blue Icon).
     *   The player will randomly serve you tracks, favoring the High priority ones.
-    *   When a track finishes, switch the playlist sort to **"Recent"** to easily lower its priority if you've mastered it.
+
+## License
+
+This project is licensed under the [GNU General Public License v3.0](LICENSE) - see the [LICENSE](LICENSE) file for details.
