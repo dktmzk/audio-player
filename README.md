@@ -1,6 +1,6 @@
-# Audio Player
+# Audio Replayer
 
-**Audio Player** is a customizable audio player designed for repeated listening and practice. It allows users to loop tracks multiple times with individually adjustable speeds for each pass, and features weighted playlist management where subsequent tracks can be selected based on a priority system.
+**Audio Replayer** is a customizable audio player designed for repeated listening and practice. It allows users to loop tracks multiple times with individually adjustable speeds for each pass, and features weighted playlist management where subsequent tracks can be selected based on a priority system.
 
 ## Key Features
 

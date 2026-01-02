@@ -12,8 +12,8 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'mask-icon.svg'],
       manifest: {
-        name: 'Audio Player',
-        short_name: 'Player',
+        name: 'Audio Replayer',
+        short_name: 'Replayer',
         description: 'A persistent web audio player for practice.',
         theme_color: '#111827',
         background_color: '#111827',
@@ -33,5 +33,5 @@ export default defineConfig({
       }
     })
   ],
-  base: '/audio-player/',
+  base: '/audio-replayer/',
 })
